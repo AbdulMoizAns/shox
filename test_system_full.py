@@ -73,10 +73,23 @@ def run_tests():
 
     # 5. Verify App GUI module imports cleanly
     import app_gui
-    print("[TEST 7] GUI Module: app_gui imported successfully with zero errors")
+    import mini_bar
+    print("[TEST 7] GUI Modules: app_gui & mini_bar imported successfully with zero errors")
+
+    # 6. Verify Network Engine
+    from network_engine import NetworkMonitorEngine
+    net_engine = NetworkMonitorEngine()
+    conns = net_engine.get_active_connections()
+    print(f"[TEST 8] Network Connections: Detected {len(conns)} active network socket(s)")
+    assert len(conns) > 0, "Should detect active TCP or UDP sockets"
+    assert "process_name" in conns[0] and "pid" in conns[0] and "remote_address" in conns[0]
+
+    down_kb, up_kb, down_str, up_str = net_engine.get_bandwidth_speeds()
+    print(f"[TEST 9] Network Bandwidth: Live speed calculated (Down: {down_str}, Up: {up_str})")
+    assert down_kb >= 0.0 and up_kb >= 0.0
 
     print("==================================================")
-    print(" [SUCCESS] ALL 7 INTEGRATION TESTS PASSED SUCCESSFULLY!")
+    print(" [SUCCESS] ALL 9 INTEGRATION TESTS PASSED SUCCESSFULLY!")
     print("==================================================")
 
 if __name__ == "__main__":

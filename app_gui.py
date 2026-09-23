@@ -23,6 +23,7 @@ except Exception:
 from monitor_engine import SystemMonitorEngine
 from alert_manager import AlertManager
 from toast_popup import show_toast_popup
+from network_engine import NetworkMonitorEngine
 
 # --- Modern Design System & Color Palette ---
 C_BG_ROOT = "#0a0c10"        # Deep Obsidian Charcoal
@@ -97,6 +98,7 @@ class ModernSystemWatchdogApp:
         # Engines
         self.engine = SystemMonitorEngine()
         self.alert_mgr = AlertManager()
+        self.net_engine = NetworkMonitorEngine()
 
         # Monitoring State
         self.is_monitoring = True
@@ -104,6 +106,8 @@ class ModernSystemWatchdogApp:
         self.selected_pid = None
         self.search_filter = ""
         self.sort_criterion = "ram"
+        self.net_search_filter = ""
+        self.net_filter_criterion = "All Connections"
         self.monitor_thread = None
 
         self._setup_styles()
@@ -289,29 +293,34 @@ class ModernSystemWatchdogApp:
         cards_frame = tk.Frame(self.root, bg=C_BG_ROOT)
         cards_frame.pack(fill="x", padx=20, pady=(14, 8))
 
-        for i in range(4):
+        for i in range(5):
             cards_frame.columnconfigure(i, weight=1)
 
-        # Card 1: CPU Usage
+        # Card 0: CPU Usage
         self.cpu_card = self._create_card(cards_frame, 0, "● CPU LOAD", "0%", C_ACCENT_CYAN)
         self.cpu_val_lbl = self.cpu_card["val_lbl"]
         self.cpu_sub_lbl = self.cpu_card["sub_lbl"]
         self.cpu_bar = self.cpu_card["bar"]
 
-        # Card 2: RAM Memory
+        # Card 1: RAM Memory
         self.ram_card = self._create_card(cards_frame, 1, "● RAM MEMORY", "0%", C_ACCENT_VIOLET)
         self.ram_val_lbl = self.ram_card["val_lbl"]
         self.ram_sub_lbl = self.ram_card["sub_lbl"]
         self.ram_bar = self.ram_card["bar"]
 
+        # Card 2: Network Traffic
+        self.net_card = self._create_card(cards_frame, 2, "● NETWORK I/O", "↓ 0.0 KB/s", C_ACCENT_CYAN, is_status=True)
+        self.net_val_lbl = self.net_card["val_lbl"]
+        self.net_sub_lbl = self.net_card["sub_lbl"]
+
         # Card 3: Disk C:
-        self.disk_card = self._create_card(cards_frame, 2, "● STORAGE (C:)", "0%", C_ACCENT_GREEN)
+        self.disk_card = self._create_card(cards_frame, 3, "● STORAGE (C:)", "0%", C_ACCENT_GREEN)
         self.disk_val_lbl = self.disk_card["val_lbl"]
         self.disk_sub_lbl = self.disk_card["sub_lbl"]
         self.disk_bar = self.disk_card["bar"]
 
         # Card 4: Health Status
-        self.status_card = self._create_card(cards_frame, 3, "● SYSTEM HEALTH", "HEALTHY", C_ACCENT_GREEN, is_status=True)
+        self.status_card = self._create_card(cards_frame, 4, "● SYSTEM HEALTH", "HEALTHY", C_ACCENT_GREEN, is_status=True)
         self.health_val_lbl = self.status_card["val_lbl"]
         self.health_sub_lbl = self.status_card["sub_lbl"]
 
@@ -408,12 +417,17 @@ class ModernSystemWatchdogApp:
         self.notebook.add(self.tab_proc, text="  ⚡ Active Processes  ")
         self._build_processes_tab()
 
-        # Tab 2: Alert History Log
+        # Tab 2: Network Traffic & Internet Monitor
+        self.tab_net = tk.Frame(self.notebook, bg=C_BG_ROOT)
+        self.notebook.add(self.tab_net, text="  🌐 Network Traffic  ")
+        self._build_network_tab()
+
+        # Tab 3: Alert History Log
         self.tab_history = tk.Frame(self.notebook, bg=C_BG_ROOT)
         self.notebook.add(self.tab_history, text="  📜 Alert History  ")
         self._build_history_tab()
 
-        # Tab 3: Alert Thresholds & Settings
+        # Tab 4: Alert Thresholds & Settings
         self.tab_settings = tk.Frame(self.notebook, bg=C_BG_ROOT)
         self.notebook.add(self.tab_settings, text="  ⚙️ Watchdog Settings  ")
         self._build_settings_tab()
@@ -510,6 +524,111 @@ class ModernSystemWatchdogApp:
 
         self.proc_tree.bind("<<TreeviewSelect>>", self.on_process_selected)
         self.proc_tree.bind("<Double-1>", lambda e: self.kill_selected_process())
+
+    def _build_network_tab(self):
+        toolbar = tk.Frame(self.tab_net, bg=C_BG_ROOT)
+        toolbar.pack(fill="x", pady=(10, 8))
+
+        # Search Bar
+        search_box = tk.Frame(toolbar, bg="#161922", highlightbackground=C_BORDER, highlightthickness=1)
+        search_box.pack(side="left", padx=(0, 14))
+
+        tk.Label(search_box, text="🔍", font=("Segoe UI", 9), fg=C_TXT_MUTED, bg="#161922").pack(side="left", padx=(8, 2))
+        self.net_search_entry = tk.Entry(
+            search_box,
+            font=("Segoe UI", 9),
+            bg="#161922",
+            fg=C_TXT_MAIN,
+            insertbackground=C_ACCENT_CYAN,
+            relief="flat",
+            width=26
+        )
+        self.net_search_entry.pack(side="left", ipady=4, padx=(2, 8))
+        self.net_search_entry.bind("<KeyRelease>", self.on_net_search_change)
+
+        # State Filter
+        tk.Label(toolbar, text="Filter:", font=("Segoe UI", 9), fg=C_TXT_MUTED, bg=C_BG_ROOT).pack(side="left", padx=(0, 6))
+        self.net_filter_var = tk.StringVar(value="All Connections")
+        filter_combo = ttk.Combobox(
+            toolbar,
+            textvariable=self.net_filter_var,
+            values=["All Connections", "Active (ESTABLISHED)", "Listening / Bound", "TCP Only", "UDP Only"],
+            state="readonly",
+            width=20
+        )
+        filter_combo.pack(side="left", padx=(0, 14))
+        filter_combo.bind("<<ComboboxSelected>>", self.on_net_filter_change)
+
+        # Net Speed Badge
+        self.net_speed_badge = tk.Label(
+            toolbar,
+            text="↓ 0.0 KB/s  •  ↑ 0.0 KB/s",
+            font=("Segoe UI", 9, "bold"),
+            fg=C_ACCENT_CYAN,
+            bg="#142132",
+            padx=10,
+            pady=4,
+            relief="flat"
+        )
+        self.net_speed_badge.pack(side="left")
+
+        # Terminate Connection Process Button
+        self.net_kill_btn = tk.Button(
+            toolbar,
+            text="⛔ End Task",
+            command=self.kill_selected_net_process,
+            bg="#be123c",
+            fg="white",
+            activebackground="#9f1239",
+            font=("Segoe UI", 9, "bold"),
+            relief="flat",
+            padx=14,
+            pady=4,
+            cursor="hand2"
+        )
+        self.net_kill_btn.pack(side="right")
+
+        # Table Container
+        table_container = tk.Frame(self.tab_net, bg=C_BG_CARD, highlightbackground=C_BORDER, highlightthickness=1)
+        table_container.pack(fill="both", expand=True)
+
+        cols = ("process", "pid", "proto", "local", "remote", "service", "state")
+        self.net_tree = ttk.Treeview(
+            table_container,
+            columns=cols,
+            show="headings",
+            selectmode="browse"
+        )
+
+        self.net_tree.heading("process", text="APPLICATION", anchor="w")
+        self.net_tree.heading("pid", text="PID", anchor="center")
+        self.net_tree.heading("proto", text="PROTO", anchor="center")
+        self.net_tree.heading("local", text="LOCAL ENDPOINT", anchor="w")
+        self.net_tree.heading("remote", text="REMOTE DESTINATION", anchor="w")
+        self.net_tree.heading("service", text="SERVICE / PORT", anchor="w")
+        self.net_tree.heading("state", text="CONNECTION STATE", anchor="center")
+
+        self.net_tree.column("process", width=170, minwidth=120)
+        self.net_tree.column("pid", width=70, minwidth=50, anchor="center")
+        self.net_tree.column("proto", width=65, minwidth=50, anchor="center")
+        self.net_tree.column("local", width=160, minwidth=120)
+        self.net_tree.column("remote", width=190, minwidth=130)
+        self.net_tree.column("service", width=150, minwidth=110)
+        self.net_tree.column("state", width=130, minwidth=100, anchor="center")
+
+        # Tag styles for Network connections
+        self.net_tree.tag_configure("established", background="#122533", foreground="#38bdf8")
+        self.net_tree.tag_configure("listening", background=C_BG_CARD, foreground="#94a3b8")
+        self.net_tree.tag_configure("alt", background=C_BG_ROW_ALT, foreground="#cbd5e1")
+        self.net_tree.tag_configure("normal", background=C_BG_CARD, foreground="#cbd5e1")
+
+        v_scroll = ttk.Scrollbar(table_container, orient="vertical", command=self.net_tree.yview)
+        self.net_tree.configure(yscrollcommand=v_scroll.set)
+
+        self.net_tree.pack(side="left", fill="both", expand=True)
+        v_scroll.pack(side="right", fill="y")
+
+        self.net_tree.bind("<Double-1>", lambda e: self.kill_selected_net_process())
 
     def _build_history_tab(self):
         history_toolbar = tk.Frame(self.tab_history, bg=C_BG_ROOT)
@@ -728,6 +847,44 @@ class ModernSystemWatchdogApp:
             else:
                 messagebox.showerror("Error", msg)
 
+    def on_net_search_change(self, event=None):
+        self.net_search_filter = self.net_search_entry.get().strip().lower()
+        self.manual_refresh()
+
+    def on_net_filter_change(self, event=None):
+        self.net_filter_criterion = self.net_filter_var.get()
+        self.manual_refresh()
+
+    def kill_selected_net_process(self):
+        sel = self.net_tree.selection()
+        if not sel:
+            messagebox.showinfo("Select Process", "Please select a network connection from the table first.")
+            return
+        vals = self.net_tree.item(sel[0], "values")
+        if not vals:
+            return
+        name = vals[0]
+        try:
+            pid = int(vals[1])
+        except Exception:
+            return
+
+        if pid in (0, 4):
+            messagebox.showwarning("Protected System", f"PID {pid} is a protected Windows core system process and cannot be terminated.")
+            return
+
+        confirm = messagebox.askyesno(
+            "Terminate Network Process",
+            f"Are you sure you want to terminate '{name}' (PID: {pid})?\nThis will disconnect its active network session."
+        )
+        if confirm:
+            success, msg = self.engine.kill_process(pid)
+            if success:
+                messagebox.showinfo("Terminated", f"Successfully terminated '{name}' (PID: {pid}).")
+                self.manual_refresh()
+            else:
+                messagebox.showerror("Error", msg)
+
     def kill_first_hung_app(self):
         for alert in self.alert_mgr.active_alerts:
             if alert.get("type") == "HUNG" and alert.get("pid"):
@@ -795,6 +952,8 @@ class ModernSystemWatchdogApp:
             mem_stats = self.engine.get_memory_stats()
             disk_stats = self.engine.get_disk_stats("C:\\")
             processes = self.engine.get_processes()
+            net_down, net_up, net_down_str, net_up_str = self.net_engine.get_bandwidth_speeds()
+            net_conns = self.net_engine.get_active_connections()
 
             sys_summary = {
                 "cpu_percent": cpu_pct,
@@ -803,11 +962,24 @@ class ModernSystemWatchdogApp:
             }
             active_alerts = self.alert_mgr.evaluate(sys_summary, processes)
 
-            self.root.after(0, self._render_ui_updates, cpu_pct, mem_stats, disk_stats, processes, active_alerts)
+            self.root.after(
+                0,
+                self._render_ui_updates,
+                cpu_pct,
+                mem_stats,
+                disk_stats,
+                processes,
+                active_alerts,
+                net_down_str,
+                net_up_str,
+                net_conns
+            )
         except Exception:
             pass
 
-    def _render_ui_updates(self, cpu_pct, mem_stats, disk_stats, processes, active_alerts):
+    def _render_ui_updates(self, cpu_pct, mem_stats, disk_stats, processes, active_alerts, net_down_str="0.0 KB/s", net_up_str="0.0 KB/s", net_conns=None):
+        if net_conns is None:
+            net_conns = []
         # Update Metric Cards
         self.cpu_val_lbl.config(text=f"{cpu_pct:.0f}%")
         self.cpu_bar.set_value(cpu_pct)
@@ -822,6 +994,12 @@ class ModernSystemWatchdogApp:
         self.disk_val_lbl.config(text=f"{disk_pct:.0f}%")
         self.disk_bar.set_value(disk_pct)
         self.disk_sub_lbl.config(text=f"💿 {disk_stats['free_gb']} GB free of {disk_stats['total_gb']} GB")
+
+        # Update Network Traffic Card
+        self.net_val_lbl.config(text=f"↓ {net_down_str}")
+        self.net_sub_lbl.config(text=f"↑ {net_up_str}  •  {len(net_conns)} Sockets")
+        if hasattr(self, 'net_speed_badge') and self.net_speed_badge:
+            self.net_speed_badge.config(text=f"↓ {net_down_str}  •  ↑ {net_up_str}")
 
         # Update Health Status Card & Alerts Banner
         hung_count = sum(1 for a in active_alerts if a["type"] == "HUNG")
@@ -935,9 +1113,77 @@ class ModernSystemWatchdogApp:
                 tags=(a["severity"],)
             )
 
+        # Update Network Connections Tree
+        if hasattr(self, 'net_tree') and self.net_tree:
+            net_filtered = []
+            nq = self.net_search_filter
+            filter_mode = self.net_filter_var.get() if hasattr(self, 'net_filter_var') else "All Connections"
+
+            for c in net_conns:
+                # Text search
+                if nq:
+                    match = (
+                        (nq in c["process_name"].lower()) or
+                        (nq in str(c["pid"])) or
+                        (nq in c["remote_address"].lower()) or
+                        (nq in c["local_address"].lower()) or
+                        (nq in c["service"].lower())
+                    )
+                    if not match:
+                        continue
+
+                # Category filter
+                if filter_mode == "Active (ESTABLISHED)" and not c["is_established"]:
+                    continue
+                elif filter_mode == "Listening / Bound" and c["state"] not in ("LISTENING", "BOUND"):
+                    continue
+                elif filter_mode == "TCP Only" and c["protocol"] != "TCP":
+                    continue
+                elif filter_mode == "UDP Only" and c["protocol"] != "UDP":
+                    continue
+
+                net_filtered.append(c)
+
+            # Preserve Network Tree selection
+            net_sel = self.net_tree.selection()
+            net_sel_pid = None
+            if net_sel:
+                nv = self.net_tree.item(net_sel[0], "values")
+                if nv and len(nv) > 1:
+                    net_sel_pid = str(nv[1])
+
+            self.net_tree.delete(*self.net_tree.get_children())
+            for idx, c in enumerate(net_filtered[:150]):
+                state_val = c["state"]
+                if c["is_established"]:
+                    tag = "established"
+                    state_val = "● ESTABLISHED"
+                elif c["state"] in ("LISTENING", "BOUND"):
+                    tag = "listening"
+                else:
+                    tag = "alt" if idx % 2 == 0 else "normal"
+
+                item_id = self.net_tree.insert(
+                    "",
+                    "end",
+                    values=(
+                        c["process_name"],
+                        c["pid"],
+                        c["protocol"],
+                        c["local_address"],
+                        c["remote_address"],
+                        c["service"],
+                        state_val
+                    ),
+                    tags=(tag,)
+                )
+                if net_sel_pid and str(c["pid"]) == net_sel_pid:
+                    self.net_tree.selection_set(item_id)
+
         # Update Status Bar
+        est_count = sum(1 for c in net_conns if c.get("is_established"))
         self.status_procs_lbl.config(
-            text=f"Total: {len(processes)} processes  |  Visible: {len(filtered)}  |  Updated: {time.strftime('%H:%M:%S')}"
+            text=f"Total: {len(processes)} processes ({len(filtered)} visible)  |  Sockets: {len(net_conns)} ({est_count} established)  |  Net: ↓ {net_down_str} ↑ {net_up_str}  |  Updated: {time.strftime('%H:%M:%S')}"
         )
 
     def switch_to_mini_view(self):

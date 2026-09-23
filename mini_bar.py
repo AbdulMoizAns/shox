@@ -25,9 +25,10 @@ except Exception:
 from monitor_engine import SystemMonitorEngine
 from alert_manager import AlertManager
 from toast_popup import show_toast_popup
+from network_engine import NetworkMonitorEngine
 
 
-def get_taskbar_anchor_position(bar_width=410, bar_height=42):
+def get_taskbar_anchor_position(bar_width=515, bar_height=42):
     """
     Retrieves the Windows usable screen work area (excluding taskbar)
     and computes the exact (x, y) coordinates to sit right above the clock.
@@ -55,7 +56,7 @@ class MiniBarWidget:
             pass
 
         # Window dimensions & styling
-        self.bar_width = 415
+        self.bar_width = 515
         self.bar_height = 42
         self.root.overrideredirect(True)      # Frameless floating widget
         self.root.attributes("-topmost", True)  # Always on top
@@ -72,6 +73,7 @@ class MiniBarWidget:
         # Engines
         self.engine = SystemMonitorEngine()
         self.alert_mgr = AlertManager()
+        self.net_engine = NetworkMonitorEngine()
         self.is_running = True
         self.blink_state = False
 
@@ -165,6 +167,32 @@ class MiniBarWidget:
             anchor="w"
         )
         self.ram_val.pack(side="left", padx=(2, 0))
+
+        # Divider
+        tk.Label(self.outer_border, text="|", font=("Segoe UI", 8), fg="#232735", bg="#11141c").pack(side="left", padx=2)
+
+        # Net Metric
+        net_box = tk.Frame(self.outer_border, bg="#11141c")
+        net_box.pack(side="left", padx=3)
+
+        tk.Label(
+            net_box,
+            text="🌐",
+            font=("Segoe UI", 8),
+            fg="#38bdf8",
+            bg="#11141c"
+        ).pack(side="left")
+
+        self.net_val = tk.Label(
+            net_box,
+            text="↓0K ↑0K",
+            font=("Segoe UI", 8, "bold"),
+            fg="#f8fafc",
+            bg="#11141c",
+            width=13,
+            anchor="w"
+        )
+        self.net_val.pack(side="left", padx=(2, 0))
 
         # Divider
         tk.Label(self.outer_border, text="|", font=("Segoe UI", 8), fg="#232735", bg="#11141c").pack(side="left", padx=2)
@@ -279,6 +307,11 @@ class MiniBarWidget:
                 cpu_pct = self.engine.get_system_cpu_percent()
                 mem = self.engine.get_memory_stats()
                 procs = self.engine.get_processes()
+                down_kb, up_kb, down_str, up_str = self.net_engine.get_bandwidth_speeds()
+
+                d_compact = f"{down_kb:.0f}K" if down_kb < 1000 else f"{down_kb/1024.0:.1f}M"
+                u_compact = f"{up_kb:.0f}K" if up_kb < 1000 else f"{up_kb/1024.0:.1f}M"
+                net_text = f"↓{d_compact} ↑{u_compact}"
 
                 sys_summary = {
                     "cpu_percent": cpu_pct,
@@ -287,14 +320,16 @@ class MiniBarWidget:
                 }
                 alerts = self.alert_mgr.evaluate(sys_summary, procs)
 
-                self.root.after(0, self._update_ui, cpu_pct, mem, alerts)
+                self.root.after(0, self._update_ui, cpu_pct, mem, alerts, net_text)
             except Exception:
                 pass
             time.sleep(1.0)
 
-    def _update_ui(self, cpu_pct, mem, alerts):
+    def _update_ui(self, cpu_pct, mem, alerts, net_text="↓0K ↑0K"):
         self.cpu_val.config(text=f"{cpu_pct:.0f}%")
         self.ram_val.config(text=f"{mem['percent']}% ({mem['used_gb']}G)")
+        if hasattr(self, 'net_val') and self.net_val:
+            self.net_val.config(text=net_text)
 
         hung_alerts = [a for a in alerts if a["type"] == "HUNG"]
         heavy_alerts = [a for a in alerts if a["type"] in ("HIGH_RAM", "HIGH_CPU")]

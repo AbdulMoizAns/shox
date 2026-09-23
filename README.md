@@ -41,16 +41,22 @@
 - **No Annoying Sounds / Spikes:** Temporary resource spikes (such as opening a browser tab or compiling code) do not trigger spam alerts.
 - **Sustained Tracking:** Alerts and toast notifications are only fired if a background or foreground process continuously consumes heavy CPU/RAM for **over 60 seconds**.
 
-### 4. 📌 Floating Mini Bar (Docked Above Taskbar Clock)
+### 4. 🌐 Real-Time Internet & Network Traffic Monitor
+- **Active Socket Tracking:** Leverages Windows IP Helper API (`GetExtendedTcpTable`, `GetExtendedUdpTable`) to list every application actively using the internet or network ports.
+- **Inspect Remote Connections:** View Process Name, PID, Protocol (TCP/UDP), Local Port, Remote IP, and Service type (e.g. `HTTPS`, `DNS`, `SSH`, `SMB`).
+- **Live Bandwidth Speeds:** Real-time download (`↓ KB/s`) and upload (`↑ KB/s`) calculation via `GetIfTable2`.
+- **1-Click Network Disconnect / End Task:** Instantly terminate suspicious background network connections.
+
+### 5. 📌 Floating Mini Bar (Docked Above Taskbar Clock)
 - Compact, frameless floating widget designed to sit unobtrusively directly above the Windows system clock.
-- Shows live CPU, RAM, and responsive freeze alerts.
+- Shows live CPU, RAM, and real-time network speeds (`🌐 ↓0K ↑0K`).
 - Fully draggable with a dedicated grip (`⋮⋮`) and 1-click expand (`⛶`) to the full dashboard.
 
-### 5. 🎨 Obsidian Dark Modern UI (Zero Blur)
+### 6. 🎨 Obsidian Dark Modern UI (Zero Blur)
 - **High-DPI Per-Monitor Aware:** Configured via `ctypes.windll.shcore.SetProcessDpiAwareness(2)` for razor-sharp rendering on 1080p, 2K, 4K, and high-DPI laptop displays.
 - Custom vector canvas micro-bars, obsidian card styling, alternating table rows, and color-coded status badges.
 
-### 6. 🚀 100% Zero External Dependencies
+### 7. 🚀 100% Zero External Dependencies
 - Runs natively on any clean Windows installation! No `pip install`, no external C++ wheels, no psutil compilation required. Uses pure standard library `ctypes` and `tkinter`.
 
 ---
@@ -65,6 +71,7 @@ shox/
 │   └── shox.ico             # Windows multi-resolution icon
 ├── app_gui.py               # Main Obsidian Dark dashboard (Tkinter UI)
 ├── mini_bar.py              # Floating mini bar widget (taskbar dock)
+├── network_engine.py        # Native Win32 network & bandwidth engine
 ├── monitor_engine.py        # Native Win32 ctypes engine (CPU, RAM, Hung detector)
 ├── alert_manager.py         # Smart sustained 1-minute alert watchdog & history
 ├── toast_popup.py           # Smooth non-blocking desktop toast notifications
@@ -72,7 +79,7 @@ shox/
 ├── main.py                  # CLI and GUI entry point (supports --mini flag)
 ├── run.bat                  # Double-click launcher for Full Dashboard
 ├── run_mini.bat             # Double-click launcher for Mini Bar View
-├── test_system_full.py      # Automated integration test suite (7 tests)
+├── test_system_full.py      # Automated integration test suite (9 tests)
 ├── .gitignore               # Clean git exclusions
 ├── LICENSE                  # MIT License
 └── README.md                # Project documentation
@@ -156,7 +163,7 @@ Want to verify how SHOX catches frozen programs?
 
 ## 🧪 Running Automated Tests
 
-To run the full suite of 7 integration tests:
+To run the full suite of 9 integration tests:
 ```powershell
 python -u test_system_full.py
 ```
@@ -173,9 +180,11 @@ Expected result:
 [TEST 5a] Sustained Check: PASSED
 [TEST 5b] Sustained Alert Trigger: PASSED
 [TEST 6] Not Responding Detector: PASSED
-[TEST 7] GUI Module: PASSED
+[TEST 7] GUI Modules: PASSED
+[TEST 8] Network Connections: PASSED
+[TEST 9] Network Bandwidth: PASSED
 ==================================================
- [SUCCESS] ALL 7 INTEGRATION TESTS PASSED SUCCESSFULLY!
+ [SUCCESS] ALL 9 INTEGRATION TESTS PASSED SUCCESSFULLY!
 ==================================================
 ```
 
