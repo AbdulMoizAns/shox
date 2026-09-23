@@ -22,6 +22,12 @@ except Exception:
     except Exception:
         pass
 
+# --- Set Explicit Windows AppUserModelID (Fixes Taskbar Icon) ---
+try:
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("shox.performance.guardian.app.v1")
+except Exception:
+    pass
+
 from monitor_engine import SystemMonitorEngine
 from alert_manager import AlertManager
 from toast_popup import show_toast_popup
@@ -49,9 +55,13 @@ class MiniBarWidget:
 
         self.root.title("SHOX Mini Bar")
         try:
-            icon_path = os.path.join(os.path.dirname(__file__), "shox.ico")
-            if os.path.exists(icon_path):
-                self.root.iconbitmap(icon_path)
+            icon_ico = os.path.join(os.path.dirname(__file__), "shox.ico")
+            icon_png = os.path.join(os.path.dirname(__file__), "shox_logo.png")
+            if os.path.exists(icon_ico):
+                self.root.iconbitmap(icon_ico)
+            if os.path.exists(icon_png):
+                self._app_taskbar_icon = tk.PhotoImage(file=icon_png)
+                self.root.iconphoto(True, self._app_taskbar_icon)
         except Exception:
             pass
 
@@ -388,12 +398,20 @@ class MiniBarWidget:
 
 
 def launch_mini():
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("shox.performance.guardian.app.v1")
+    except Exception:
+        pass
     root = tk.Tk()
     root.title("SHOX Mini Bar")
     try:
-        icon_path = os.path.join(os.path.dirname(__file__), "shox.ico")
-        if os.path.exists(icon_path):
-            root.iconbitmap(icon_path)
+        icon_ico = os.path.join(os.path.dirname(__file__), "shox.ico")
+        icon_png = os.path.join(os.path.dirname(__file__), "shox_logo.png")
+        if os.path.exists(icon_ico):
+            root.iconbitmap(icon_ico)
+        if os.path.exists(icon_png):
+            photo = tk.PhotoImage(file=icon_png)
+            root.iconphoto(True, photo)
     except Exception:
         pass
     widget = MiniBarWidget(root)

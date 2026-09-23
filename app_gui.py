@@ -20,6 +20,12 @@ except Exception:
     except Exception:
         pass
 
+# --- Set Explicit Windows AppUserModelID (Fixes Taskbar Icon showing Python logo) ---
+try:
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("shox.performance.guardian.app.v1")
+except Exception:
+    pass
+
 from monitor_engine import SystemMonitorEngine
 from alert_manager import AlertManager
 from toast_popup import show_toast_popup
@@ -86,12 +92,16 @@ class ModernSystemWatchdogApp:
         self.root.minsize(960, 620)
         self.root.configure(bg=C_BG_ROOT)
 
-        # Apply Window Icon
+        # Apply Window & Taskbar Icons
         try:
             import os
-            icon_path = os.path.join(os.path.dirname(__file__), "shox.ico")
-            if os.path.exists(icon_path):
-                self.root.iconbitmap(icon_path)
+            icon_ico = os.path.join(os.path.dirname(__file__), "shox.ico")
+            icon_png = os.path.join(os.path.dirname(__file__), "shox_logo.png")
+            if os.path.exists(icon_ico):
+                self.root.iconbitmap(icon_ico)
+            if os.path.exists(icon_png):
+                self._app_taskbar_icon = tk.PhotoImage(file=icon_png)
+                self.root.iconphoto(True, self._app_taskbar_icon)
         except Exception:
             pass
 
@@ -1214,6 +1224,10 @@ class ModernSystemWatchdogApp:
 
 
 def launch():
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("shox.performance.guardian.app.v1")
+    except Exception:
+        pass
     root = tk.Tk()
     app = ModernSystemWatchdogApp(root)
     root.mainloop()

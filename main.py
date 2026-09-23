@@ -4,6 +4,13 @@ SHOX — Main entry point for System Performance & Freeze Guardian.
 """
 
 import sys
+import ctypes
+
+# Set explicit Windows AppUserModelID so Windows Taskbar uses SHOX icon instead of Python's icon
+try:
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("shox.performance.guardian.app.v1")
+except Exception:
+    pass
 
 if __name__ == "__main__":
     try:
