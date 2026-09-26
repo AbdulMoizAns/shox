@@ -88,8 +88,41 @@ def run_tests():
     print(f"[TEST 9] Network Bandwidth: Live speed calculated (Down: {down_str}, Up: {up_str})")
     assert down_kb >= 0.0 and up_kb >= 0.0
 
+    # 7. Test Cumulative Session Data Usage
+    in_mb, out_mb, in_str, out_str = net_engine.get_session_data_usage()
+    print(f"[TEST 10] Session Data Tracker: Cumulative recorded (In: {in_str}, Out: {out_str})")
+    assert in_mb >= 0.0 and out_mb >= 0.0
+
+    # 8. Test System Optimizer Engine
+    from optimizer_engine import SystemOptimizerEngine
+    optimizer = SystemOptimizerEngine()
+
+    # 8a. Test Clean RAM
+    freed_mb, count = optimizer.clean_system_ram()
+    print(f"[TEST 11] Clean RAM Purge: Successfully flushed {freed_mb:.1f} MB across {count} processes")
+    assert count > 0, "Should empty working set for at least one accessible process"
+
+    # 8b. Test Battery / Power Status
+    power = optimizer.get_power_status()
+    print(f"[TEST 12] Power Status: {power['status_str']} (Battery: {power['percent']}%, AC: {power['is_ac']})")
+    assert "status_str" in power and "is_ac" in power
+
+    # 8c. Test Startup Apps Enumeration
+    startup_apps = optimizer.get_startup_apps()
+    print(f"[TEST 13] Startup Manager: Found {len(startup_apps)} auto-start apps in Windows Registry")
+    assert isinstance(startup_apps, list)
+    boot_enabled = optimizer.is_shox_startup_enabled()
+    print(f"          SHOX Startup Enabled in HKCU: {boot_enabled}")
+
+    # 8d. Test Process Priority Control on Self
+    import os
+    self_pid = os.getpid()
+    success, msg = optimizer.set_process_priority(self_pid, "NORMAL")
+    print(f"[TEST 14] Process Priority Control: PID {self_pid} -> {msg}")
+    assert success, "Should successfully adjust process priority class"
+
     print("==================================================")
-    print(" [SUCCESS] ALL 9 INTEGRATION TESTS PASSED SUCCESSFULLY!")
+    print(" [SUCCESS] ALL 14 INTEGRATION TESTS PASSED SUCCESSFULLY!")
     print("==================================================")
 
 if __name__ == "__main__":

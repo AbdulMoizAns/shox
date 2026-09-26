@@ -30,6 +30,7 @@ from monitor_engine import SystemMonitorEngine
 from alert_manager import AlertManager
 from toast_popup import show_toast_popup
 from network_engine import NetworkMonitorEngine
+from optimizer_engine import SystemOptimizerEngine
 
 # --- Modern Design System & Color Palette ---
 C_BG_ROOT = "#0a0c10"        # Deep Obsidian Charcoal
@@ -84,6 +85,77 @@ class ModernProgressBar(tk.Canvas):
             self.create_rectangle(0, 1, fill_w, h - 1, fill=self.fill_color, outline="")
 
 
+class SparklineGraph(tk.Canvas):
+    """
+    Ultra-sleek 60-second real-time performance wave graph rendered via native Tkinter Canvas.
+    Zero external dependencies. High-performance, anti-aliased smooth spline curve with filled area.
+    """
+    def __init__(self, parent, title="CPU WAVE", color=C_ACCENT_CYAN, fill_shade="#102538", bg_color=C_BG_CARD, max_pts=60, unit="%", height=68, **kwargs):
+        super().__init__(parent, height=height, bg=bg_color, highlightthickness=0, bd=0, **kwargs)
+        self.title = title
+        self.color = color
+        self.fill_shade = fill_shade
+        self.bg_color = bg_color
+        self.max_pts = max_pts
+        self.unit = unit
+        self.data = [0.0] * max_pts
+        self.curr_str = f"0{unit}"
+        self.bind("<Configure>", self._draw)
+
+    def add_point(self, val, label=None):
+        self.data.pop(0)
+        self.data.append(float(val))
+        if label is not None:
+            self.curr_str = label
+        else:
+            self.curr_str = f"{val:.0f}{self.unit}"
+        self._draw()
+
+    def _draw(self, event=None):
+        self.delete("all")
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 15 or h < 15:
+            return
+
+        # Header Title and Value
+        self.create_text(10, 8, anchor="nw", text=self.title, font=("Segoe UI", 8, "bold"), fill=self.color)
+        self.create_text(w - 10, 8, anchor="ne", text=self.curr_str, font=("Segoe UI", 8, "bold"), fill=C_TXT_MAIN)
+
+        top_y = 24
+        bot_y = h - 6
+        plot_h = max(1, bot_y - top_y)
+
+        # Dynamic max scale
+        if self.unit == "%":
+            max_v = 100.0
+        else:
+            max_data = max(self.data)
+            max_v = max(50.0, max_data * 1.25)
+
+        step = (w - 20) / float(self.max_pts - 1)
+        pts = []
+        for i, v in enumerate(self.data):
+            x = 10 + i * step
+            norm_v = min(1.0, max(0.0, v / max_v))
+            y = bot_y - (norm_v * plot_h)
+            pts.append((x, y))
+
+        if len(pts) > 1:
+            # Underbelly tint
+            poly = [(10, bot_y)] + pts + [(pts[-1][0], bot_y)]
+            flat_poly = [coord for pt in poly for coord in pt]
+            self.create_polygon(flat_poly, fill=self.fill_shade, outline="")
+
+            # Smooth wave line
+            flat_pts = [coord for pt in pts for coord in pt]
+            self.create_line(flat_pts, fill=self.color, width=2, smooth=True)
+
+            # Latest live pulse dot
+            last_x, last_y = pts[-1]
+            self.create_oval(last_x - 3, last_y - 3, last_x + 3, last_y + 3, fill="#ffffff", outline=self.color, width=1.5)
+
+
 class ModernSystemWatchdogApp:
     def __init__(self, root):
         self.root = root
@@ -109,6 +181,7 @@ class ModernSystemWatchdogApp:
         self.engine = SystemMonitorEngine()
         self.alert_mgr = AlertManager()
         self.net_engine = NetworkMonitorEngine()
+        self.optimizer = SystemOptimizerEngine()
 
         # Monitoring State
         self.is_monitoring = True
@@ -120,9 +193,15 @@ class ModernSystemWatchdogApp:
         self.net_filter_criterion = "All Connections"
         self.monitor_thread = None
 
+        # Advanced Mode & Optimization State
+        self.game_mode_active = False
+        self.auto_clean_ram = False
+        self.last_auto_clean_time = 0
+
         self._setup_styles()
         self._build_header()
         self._build_metric_cards()
+        self._build_wave_graphs()
         self._build_alerts_section()
         self._build_main_tabs()
         self._build_status_bar()
@@ -244,9 +323,56 @@ class ModernSystemWatchdogApp:
         )
         app_sub.pack(side="left", padx=(8, 0))
 
+        # Battery / Power Status Badge in Header
+        self.header_battery_lbl = tk.Label(
+            header,
+            text="⚡ Power: Detecting...",
+            font=("Segoe UI", 9, "bold"),
+            fg=C_ACCENT_GREEN,
+            bg="#141f1c",
+            padx=10,
+            pady=4,
+            relief="flat"
+        )
+        self.header_battery_lbl.pack(side="left", padx=(18, 0), pady=12)
+
         # Top Control Action Buttons
         btn_box = tk.Frame(header, bg=C_BG_HEADER)
         btn_box.pack(side="right", padx=20, pady=11)
+
+        # 1-Click Clean RAM Button
+        self.clean_ram_btn = tk.Button(
+            btn_box,
+            text="🧹 Clean RAM",
+            command=self.action_clean_ram,
+            bg="#b45309",
+            fg="#fef3c7",
+            activebackground="#d97706",
+            activeforeground="#ffffff",
+            font=("Segoe UI", 9, "bold"),
+            relief="flat",
+            padx=12,
+            pady=5,
+            cursor="hand2"
+        )
+        self.clean_ram_btn.pack(side="left", padx=(0, 8))
+
+        # Game / Focus Mode Booster Toggle
+        self.game_mode_btn = tk.Button(
+            btn_box,
+            text="🚀 Game Mode: OFF",
+            command=self.toggle_game_mode,
+            bg="#1e2330",
+            fg=C_TXT_SUB,
+            activebackground="#2a3142",
+            activeforeground=C_TXT_MAIN,
+            font=("Segoe UI", 9, "bold"),
+            relief="flat",
+            padx=12,
+            pady=5,
+            cursor="hand2"
+        )
+        self.game_mode_btn.pack(side="left", padx=(0, 8))
 
         # Mini Bar Mode Button (Vibrant Indigo Pill)
         self.mini_btn = tk.Button(
@@ -378,6 +504,32 @@ class ModernSystemWatchdogApp:
 
         return {"val_lbl": val_lbl, "sub_lbl": sub_lbl, "bar": bar, "frame": card}
 
+    def _build_wave_graphs(self):
+        """Constructs three 60s real-time sparkline wave monitors for CPU, RAM, and Network."""
+        wave_container = tk.Frame(self.root, bg=C_BG_ROOT)
+        wave_container.pack(fill="x", padx=20, pady=(0, 8))
+
+        for i in range(3):
+            wave_container.columnconfigure(i, weight=1)
+
+        # 1. CPU Wave Graph
+        f_cpu = tk.Frame(wave_container, bg=C_BG_CARD, highlightbackground=C_BORDER, highlightthickness=1)
+        f_cpu.grid(row=0, column=0, sticky="nsew", padx=6, pady=2)
+        self.cpu_wave = SparklineGraph(f_cpu, title="⚡ CPU USAGE WAVE (60S)", color=C_ACCENT_CYAN, fill_shade="#0e2336", unit="%")
+        self.cpu_wave.pack(fill="both", expand=True, padx=4, pady=4)
+
+        # 2. RAM Wave Graph
+        f_ram = tk.Frame(wave_container, bg=C_BG_CARD, highlightbackground=C_BORDER, highlightthickness=1)
+        f_ram.grid(row=0, column=1, sticky="nsew", padx=6, pady=2)
+        self.ram_wave = SparklineGraph(f_ram, title="💾 RAM COMMITTED WAVE (60S)", color=C_ACCENT_VIOLET, fill_shade="#221636", unit="%")
+        self.ram_wave.pack(fill="both", expand=True, padx=4, pady=4)
+
+        # 3. Network Wave Graph
+        f_net = tk.Frame(wave_container, bg=C_BG_CARD, highlightbackground=C_BORDER, highlightthickness=1)
+        f_net.grid(row=0, column=2, sticky="nsew", padx=6, pady=2)
+        self.net_wave = SparklineGraph(f_net, title="🌐 NETWORK BANDWIDTH WAVE", color=C_ACCENT_GREEN, fill_shade="#10291f", unit=" KB/s")
+        self.net_wave.pack(fill="both", expand=True, padx=4, pady=4)
+
     def _build_alerts_section(self):
         self.alerts_frame = tk.Frame(self.root, bg=C_BG_ROOT)
         self.alerts_frame.pack(fill="x", padx=20, pady=(2, 10))
@@ -477,21 +629,69 @@ class ModernSystemWatchdogApp:
         sort_combo.pack(side="left", padx=(0, 14))
         sort_combo.bind("<<ComboboxSelected>>", self.on_sort_change)
 
-        # End Task Action Button
+        # Process Actions: End Task, Resume, Suspend, High Priority
         self.end_task_btn = tk.Button(
             toolbar,
-            text="⛔ End Task / Terminate",
+            text="⛔ End Task",
             command=self.kill_selected_process,
             bg="#be123c",
             fg="white",
             activebackground="#9f1239",
             font=("Segoe UI", 9, "bold"),
             relief="flat",
-            padx=14,
+            padx=12,
             pady=4,
             cursor="hand2"
         )
         self.end_task_btn.pack(side="right")
+
+        self.resume_proc_btn = tk.Button(
+            toolbar,
+            text="▶️ Resume",
+            command=self.resume_selected_process,
+            bg="#1e293b",
+            fg="#94a3b8",
+            activebackground="#334155",
+            activeforeground="#ffffff",
+            font=("Segoe UI", 9, "bold"),
+            relief="flat",
+            padx=12,
+            pady=4,
+            cursor="hand2"
+        )
+        self.resume_proc_btn.pack(side="right", padx=(0, 6))
+
+        self.suspend_proc_btn = tk.Button(
+            toolbar,
+            text="⏸️ Suspend",
+            command=self.suspend_selected_process,
+            bg="#1e293b",
+            fg="#fbbf24",
+            activebackground="#334155",
+            activeforeground="#fcd34d",
+            font=("Segoe UI", 9, "bold"),
+            relief="flat",
+            padx=12,
+            pady=4,
+            cursor="hand2"
+        )
+        self.suspend_proc_btn.pack(side="right", padx=(0, 6))
+
+        self.boost_proc_btn = tk.Button(
+            toolbar,
+            text="🚀 High Priority",
+            command=self.boost_selected_process_priority,
+            bg="#1e293b",
+            fg=C_ACCENT_CYAN,
+            activebackground="#334155",
+            activeforeground="#ffffff",
+            font=("Segoe UI", 9, "bold"),
+            relief="flat",
+            padx=12,
+            pady=4,
+            cursor="hand2"
+        )
+        self.boost_proc_btn.pack(side="right", padx=(0, 6))
 
         # Table Container
         table_container = tk.Frame(self.tab_proc, bg=C_BG_CARD, highlightbackground=C_BORDER, highlightthickness=1)
@@ -521,6 +721,7 @@ class ModernSystemWatchdogApp:
 
         # Row styling tags (Modern high-contrast palette)
         self.proc_tree.tag_configure("hung", background="#381318", foreground="#fda4af")
+        self.proc_tree.tag_configure("suspended", background="#181c26", foreground="#94a3b8")
         self.proc_tree.tag_configure("high_ram", background="#2a1f11", foreground="#fcd34d")
         self.proc_tree.tag_configure("high_cpu", background="#152636", foreground="#7dd3fc")
         self.proc_tree.tag_configure("normal", background=C_BG_CARD, foreground="#cbd5e1")
@@ -582,6 +783,19 @@ class ModernSystemWatchdogApp:
         )
         self.net_speed_badge.pack(side="left")
 
+        # Session Cumulative Data Usage Badge
+        self.session_data_badge = tk.Label(
+            toolbar,
+            text="📊 Session: ↓ 0.0 MB  •  ↑ 0.0 MB",
+            font=("Segoe UI", 9, "bold"),
+            fg=C_ACCENT_GREEN,
+            bg="#13241c",
+            padx=10,
+            pady=4,
+            relief="flat"
+        )
+        self.session_data_badge.pack(side="left", padx=(10, 0))
+
         # Terminate Connection Process Button
         self.net_kill_btn = tk.Button(
             toolbar,
@@ -592,11 +806,45 @@ class ModernSystemWatchdogApp:
             activebackground="#9f1239",
             font=("Segoe UI", 9, "bold"),
             relief="flat",
-            padx=14,
+            padx=12,
             pady=4,
             cursor="hand2"
         )
         self.net_kill_btn.pack(side="right")
+
+        # Unblock App Firewall Rule Button
+        self.net_unblock_btn = tk.Button(
+            toolbar,
+            text="🔓 Unblock App",
+            command=self.unblock_selected_net_process,
+            bg="#1e293b",
+            fg=C_ACCENT_GREEN,
+            activebackground="#334155",
+            activeforeground="#ffffff",
+            font=("Segoe UI", 9, "bold"),
+            relief="flat",
+            padx=12,
+            pady=4,
+            cursor="hand2"
+        )
+        self.net_unblock_btn.pack(side="right", padx=(0, 6))
+
+        # 1-Click Block Internet Access via Windows Firewall
+        self.net_block_btn = tk.Button(
+            toolbar,
+            text="🛡️ Block Net",
+            command=self.block_selected_net_process,
+            bg="#1e293b",
+            fg="#f43f5e",
+            activebackground="#334155",
+            activeforeground="#fda4af",
+            font=("Segoe UI", 9, "bold"),
+            relief="flat",
+            padx=12,
+            pady=4,
+            cursor="hand2"
+        )
+        self.net_block_btn.pack(side="right", padx=(0, 6))
 
         # Table Container
         table_container = tk.Frame(self.tab_net, bg=C_BG_CARD, highlightbackground=C_BORDER, highlightthickness=1)
@@ -783,6 +1031,85 @@ class ModernSystemWatchdogApp:
         )
         apply_btn.pack(anchor="e", padx=20, pady=(10, 5))
 
+        # Card 2: Windows System Integration & Optimization
+        card2 = tk.Frame(container, bg=C_BG_CARD, highlightbackground=C_BORDER, highlightthickness=1)
+        card2.pack(fill="x", pady=12, ipady=12)
+
+        tk.Label(
+            card2,
+            text="🚀 Windows System Integration & Optimization",
+            font=("Segoe UI", 11, "bold"),
+            fg=C_TXT_MAIN,
+            bg=C_BG_CARD
+        ).pack(anchor="w", padx=20, pady=(14, 16))
+
+        # Windows Startup Toggle
+        s_boot = tk.Frame(card2, bg=C_BG_CARD)
+        s_boot.pack(fill="x", padx=20, pady=6)
+
+        is_boot = self.optimizer.is_shox_startup_enabled()
+        self.startup_var = tk.BooleanVar(value=is_boot)
+        startup_chk = tk.Checkbutton(
+            s_boot,
+            text="⚡ Start SHOX automatically with Windows (Launches in background Mini Bar mode)",
+            variable=self.startup_var,
+            command=self.on_toggle_startup,
+            font=("Segoe UI", 9),
+            fg=C_TXT_MAIN,
+            bg=C_BG_CARD,
+            selectcolor="#0f1219",
+            activebackground=C_BG_CARD,
+            activeforeground=C_ACCENT_CYAN
+        )
+        startup_chk.pack(side="left")
+
+        # Auto-Purge RAM Toggle
+        s_clean = tk.Frame(card2, bg=C_BG_CARD)
+        s_clean.pack(fill="x", padx=20, pady=6)
+
+        self.auto_clean_var = tk.BooleanVar(value=self.auto_clean_ram)
+        clean_chk = tk.Checkbutton(
+            s_clean,
+            text="🧹 Auto-Purge RAM Working Sets when total system memory exceeds 85%",
+            variable=self.auto_clean_var,
+            command=self.on_toggle_auto_clean,
+            font=("Segoe UI", 9),
+            fg=C_TXT_MAIN,
+            bg=C_BG_CARD,
+            selectcolor="#0f1219",
+            activebackground=C_BG_CARD,
+            activeforeground=C_ACCENT_CYAN
+        )
+        clean_chk.pack(side="left")
+
+        # Startup Apps Manager
+        s_mgr = tk.Frame(card2, bg=C_BG_CARD)
+        s_mgr.pack(fill="x", padx=20, pady=10)
+
+        tk.Label(
+            s_mgr,
+            text="Inspect and manage all third-party apps configured to auto-start with Windows:",
+            font=("Segoe UI", 9),
+            fg=C_TXT_SUB,
+            bg=C_BG_CARD
+        ).pack(side="left")
+
+        startup_mgr_btn = tk.Button(
+            s_mgr,
+            text="📋 Open Startup Apps Manager",
+            command=self.open_startup_manager_modal,
+            bg="#1e293b",
+            fg=C_ACCENT_CYAN,
+            activebackground="#334155",
+            activeforeground="#ffffff",
+            font=("Segoe UI", 9, "bold"),
+            relief="flat",
+            padx=14,
+            pady=4,
+            cursor="hand2"
+        )
+        startup_mgr_btn.pack(side="right")
+
     def _build_status_bar(self):
         self.status_bar = tk.Frame(self.root, bg=C_BG_HEADER, height=30, highlightbackground=C_BORDER, highlightthickness=1)
         self.status_bar.pack(fill="x", side="bottom")
@@ -945,6 +1272,242 @@ class ModernSystemWatchdogApp:
         )
         messagebox.showinfo("Settings Saved", "Watchdog settings successfully updated!")
 
+    # --- 1-Click Clean RAM & Game Mode Handlers ---
+    def action_clean_ram(self):
+        self.clean_ram_btn.config(text="🧹 Purging...", state="disabled")
+        def _worker():
+            freed_mb, count = self.optimizer.clean_system_ram()
+            msg = f"Purged {freed_mb:.1f} MB RAM across {count} processes!"
+            self.root.after(0, self._on_clean_ram_done, msg)
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_clean_ram_done(self, msg):
+        self.clean_ram_btn.config(text="🧹 Clean RAM", state="normal")
+        self.status_update_lbl.config(text=f"● {msg}", fg=C_ACCENT_AMBER)
+        show_toast_popup({
+            "name": "SHOX Memory Purge",
+            "type": "RAM_CLEANED",
+            "message": msg,
+            "severity": "NORMAL"
+        })
+        self.manual_refresh()
+
+    def toggle_game_mode(self):
+        self.game_mode_active = not self.game_mode_active
+        if self.game_mode_active:
+            self.game_mode_btn.config(
+                text="🚀 Game Mode: ON",
+                bg="#059669",
+                fg="#ecfdf5",
+                activebackground="#047857"
+            )
+            # Boost selected or foreground process if selected
+            if self.selected_pid and self.selected_pid > 4:
+                self.optimizer.set_process_priority(self.selected_pid, "HIGH")
+            show_toast_popup({
+                "name": "Game / Focus Mode",
+                "type": "GAME_MODE",
+                "message": "Game Mode Active: Elevated CPU priority scheduling enabled.",
+                "severity": "NORMAL"
+            })
+        else:
+            self.game_mode_btn.config(
+                text="🚀 Game Mode: OFF",
+                bg="#1e2330",
+                fg=C_TXT_SUB,
+                activebackground="#2a3142"
+            )
+
+    # --- Process Suspend, Resume & Priority Boost Handlers ---
+    def suspend_selected_process(self):
+        if not self.selected_pid:
+            messagebox.showinfo("Select Process", "Please select a process from the table first.")
+            return
+        if self.selected_pid in (0, 4):
+            messagebox.showwarning("Protected System", "Cannot suspend Windows core system processes.")
+            return
+        success, msg = self.optimizer.suspend_process(self.selected_pid)
+        if success:
+            messagebox.showinfo("Process Suspended", msg)
+            self.manual_refresh()
+        else:
+            messagebox.showerror("Error", msg)
+
+    def resume_selected_process(self):
+        if not self.selected_pid:
+            messagebox.showinfo("Select Process", "Please select a process from the table first.")
+            return
+        success, msg = self.optimizer.resume_process(self.selected_pid)
+        if success:
+            messagebox.showinfo("Process Resumed", msg)
+            self.manual_refresh()
+        else:
+            messagebox.showerror("Error", msg)
+
+    def boost_selected_process_priority(self):
+        if not self.selected_pid:
+            messagebox.showinfo("Select Process", "Please select a process from the table first.")
+            return
+        if self.selected_pid in (0, 4):
+            messagebox.showwarning("Protected System", "Cannot modify priority of Windows core system processes.")
+            return
+        success, msg = self.optimizer.set_process_priority(self.selected_pid, "HIGH")
+        if success:
+            messagebox.showinfo("Priority Elevated", f"Process PID {self.selected_pid} elevated to HIGH priority.")
+            self.manual_refresh()
+        else:
+            messagebox.showerror("Error", msg)
+
+    # --- Network Firewall Per-App Block & Unblock Handlers ---
+    def block_selected_net_process(self):
+        sel = self.net_tree.selection()
+        if not sel:
+            messagebox.showinfo("Select Connection", "Please select a network connection from the table first.")
+            return
+        vals = self.net_tree.item(sel[0], "values")
+        if not vals:
+            return
+        name = vals[0]
+        try:
+            pid = int(vals[1])
+        except Exception:
+            return
+
+        if pid in (0, 4):
+            messagebox.showwarning("Protected System", "Cannot block core Windows system processes.")
+            return
+
+        confirm = messagebox.askyesno(
+            "Block Internet Access",
+            f"Are you sure you want to block all outbound internet traffic for '{name}' via Windows Firewall?"
+        )
+        if confirm:
+            exe_path = None
+            try:
+                for p in self.engine.get_processes():
+                    if p["pid"] == pid:
+                        # Attempt to resolve image name or path
+                        break
+            except Exception:
+                pass
+            success, msg = self.optimizer.block_app_firewall(name, exe_path)
+            if success:
+                messagebox.showinfo("Firewall Rule Created", msg)
+            else:
+                messagebox.showerror("Firewall Error", msg)
+
+    def unblock_selected_net_process(self):
+        sel = self.net_tree.selection()
+        if not sel:
+            messagebox.showinfo("Select Connection", "Please select a network connection from the table first.")
+            return
+        vals = self.net_tree.item(sel[0], "values")
+        if not vals:
+            return
+        name = vals[0]
+        confirm = messagebox.askyesno(
+            "Unblock Internet Access",
+            f"Remove Windows Firewall block rules for '{name}'?"
+        )
+        if confirm:
+            success, msg = self.optimizer.unblock_app_firewall(name)
+            if success:
+                messagebox.showinfo("Firewall Rule Removed", msg)
+            else:
+                messagebox.showerror("Firewall Error", msg)
+
+    # --- Windows Startup & Optimization Handlers ---
+    def on_toggle_startup(self):
+        val = self.startup_var.get()
+        success, msg = self.optimizer.toggle_shox_startup(val)
+        if not success:
+            self.startup_var.set(not val)
+            messagebox.showerror("Startup Error", msg)
+        else:
+            state_str = "ENABLED" if val else "DISABLED"
+            messagebox.showinfo("Startup Updated", f"SHOX Windows startup has been {state_str}.")
+
+    def on_toggle_auto_clean(self):
+        self.auto_clean_ram = self.auto_clean_var.get()
+
+    def open_startup_manager_modal(self):
+        modal = tk.Toplevel(self.root)
+        modal.title("SHOX — Windows Startup Applications Manager")
+        modal.geometry("760x460")
+        modal.minsize(620, 360)
+        modal.configure(bg=C_BG_ROOT)
+        modal.attributes("-topmost", True)
+
+        top_bar = tk.Frame(modal, bg=C_BG_HEADER, height=45, highlightbackground=C_BORDER, highlightthickness=1)
+        top_bar.pack(fill="x")
+
+        tk.Label(
+            top_bar,
+            text="🚀 Windows Auto-Start Applications (HKCU & HKLM Run Keys)",
+            font=("Segoe UI", 10, "bold"),
+            fg=C_TXT_MAIN,
+            bg=C_BG_HEADER
+        ).pack(side="left", padx=16, pady=12)
+
+        tree_frame = tk.Frame(modal, bg=C_BG_CARD, highlightbackground=C_BORDER, highlightthickness=1)
+        tree_frame.pack(fill="both", expand=True, padx=16, pady=12)
+
+        cols = ("name", "scope", "path")
+        tree = ttk.Treeview(tree_frame, columns=cols, show="headings", selectmode="browse")
+        tree.heading("name", text="APPLICATION NAME", anchor="w")
+        tree.heading("scope", text="REGISTRY SCOPE", anchor="center")
+        tree.heading("path", text="COMMAND / EXECUTABLE PATH", anchor="w")
+
+        tree.column("name", width=190, minwidth=130)
+        tree.column("scope", width=140, minwidth=100, anchor="center")
+        tree.column("path", width=380, minwidth=200)
+
+        v_scroll = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=v_scroll.set)
+        tree.pack(side="left", fill="both", expand=True)
+        v_scroll.pack(side="right", fill="y")
+
+        def populate():
+            tree.delete(*tree.get_children())
+            apps = self.optimizer.get_startup_apps()
+            for idx, a in enumerate(apps):
+                tag = "alt" if idx % 2 == 0 else "normal"
+                tree.insert("", "end", values=(a["name"], a["scope"], a["path"]), tags=(tag,))
+
+        tree.tag_configure("normal", background=C_BG_CARD, foreground="#cbd5e1")
+        tree.tag_configure("alt", background=C_BG_ROW_ALT, foreground="#cbd5e1")
+
+        populate()
+
+        bottom_bar = tk.Frame(modal, bg=C_BG_ROOT)
+        bottom_bar.pack(fill="x", padx=16, pady=(0, 12))
+
+        tk.Button(
+            bottom_bar,
+            text="🔄 Refresh",
+            command=populate,
+            bg="#1e293b",
+            fg=C_TXT_MAIN,
+            font=("Segoe UI", 9, "bold"),
+            relief="flat",
+            padx=14,
+            pady=4,
+            cursor="hand2"
+        ).pack(side="left")
+
+        tk.Button(
+            bottom_bar,
+            text="✕ Close",
+            command=modal.destroy,
+            bg="#334155",
+            fg="#ffffff",
+            font=("Segoe UI", 9, "bold"),
+            relief="flat",
+            padx=14,
+            pady=4,
+            cursor="hand2"
+        ).pack(side="right")
+
     # --- Background Monitoring Loop ---
     def start_monitoring_thread(self):
         self.monitor_thread = threading.Thread(target=self._monitor_worker, daemon=True)
@@ -964,6 +1527,24 @@ class ModernSystemWatchdogApp:
             processes = self.engine.get_processes()
             net_down, net_up, net_down_str, net_up_str = self.net_engine.get_bandwidth_speeds()
             net_conns = self.net_engine.get_active_connections()
+            session_in_mb, session_out_mb, session_in_str, session_out_str = self.net_engine.get_session_data_usage()
+            power_status = self.optimizer.get_power_status()
+
+            # Automatic RAM Purge check when memory > 85%
+            if self.auto_clean_ram and mem_stats["percent"] > 85.0:
+                now = time.time()
+                if now - self.last_auto_clean_time > 120:  # Debounce 2 minutes
+                    self.last_auto_clean_time = now
+                    freed_mb, count = self.optimizer.clean_system_ram()
+                    if freed_mb > 10:
+                        self.alert_mgr.alert_history.insert(0, {
+                            "time": time.strftime("%H:%M:%S"),
+                            "severity": "NORMAL",
+                            "type": "AUTO_RAM_PURGE",
+                            "name": "Auto Memory Purge",
+                            "pid": "-",
+                            "message": f"Auto-purged {freed_mb:.1f} MB RAM across {count} processes (RAM exceeded 85%)"
+                        })
 
             sys_summary = {
                 "cpu_percent": cpu_pct,
@@ -980,16 +1561,41 @@ class ModernSystemWatchdogApp:
                 disk_stats,
                 processes,
                 active_alerts,
+                net_down,
                 net_down_str,
                 net_up_str,
-                net_conns
+                net_conns,
+                session_in_str,
+                session_out_str,
+                power_status
             )
         except Exception:
             pass
 
-    def _render_ui_updates(self, cpu_pct, mem_stats, disk_stats, processes, active_alerts, net_down_str="0.0 KB/s", net_up_str="0.0 KB/s", net_conns=None):
+    def _render_ui_updates(self, cpu_pct, mem_stats, disk_stats, processes, active_alerts, net_down=0.0, net_down_str="0.0 KB/s", net_up_str="0.0 KB/s", net_conns=None, session_in_str="0.0 MB", session_out_str="0.0 MB", power_status=None):
         if net_conns is None:
             net_conns = []
+        if power_status is None:
+            power_status = {}
+
+        # Update Battery / Power Badge in Header
+        b_str = power_status.get("status_str", "AC")
+        b_icon = power_status.get("icon", "⚡")
+        if hasattr(self, 'header_battery_lbl') and self.header_battery_lbl:
+            self.header_battery_lbl.config(text=f"{b_icon} {b_str}")
+
+        # Update Live Sparkline Wave Graphs
+        if hasattr(self, 'cpu_wave') and self.cpu_wave:
+            self.cpu_wave.add_point(cpu_pct)
+        if hasattr(self, 'ram_wave') and self.ram_wave:
+            self.ram_wave.add_point(mem_stats["percent"], label=f"{mem_stats['percent']}% ({mem_stats['used_gb']}G)")
+        if hasattr(self, 'net_wave') and self.net_wave:
+            self.net_wave.add_point(net_down, label=f"↓{net_down_str}")
+
+        # Update Cumulative Session Data Badge
+        if hasattr(self, 'session_data_badge') and self.session_data_badge:
+            self.session_data_badge.config(text=f"📊 Session: ↓ {session_in_str}  •  ↑ {session_out_str}")
+
         # Update Metric Cards
         self.cpu_val_lbl.config(text=f"{cpu_pct:.0f}%")
         self.cpu_bar.set_value(cpu_pct)
@@ -1084,7 +1690,10 @@ class ModernSystemWatchdogApp:
             cpu = f"{p['cpu_pct']:.1f}"
             title = p["window_title"]
 
-            if p.get("is_hung"):
+            if pid in self.optimizer.suspended_pids:
+                status = "⏸️ SUSPENDED"
+                tag = "suspended"
+            elif p.get("is_hung"):
                 status = "⚠️ NOT RESPONDING"
                 tag = "hung"
             elif p["ram_mb"] >= self.alert_mgr.ram_threshold_mb:

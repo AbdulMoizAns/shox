@@ -5,7 +5,7 @@
 <h1 align="center">⚡ SHOX — Windows System Performance & Freeze Guardian</h1>
 
 <p align="center">
-  <b>Ultra-fast, zero-dependency Windows system resource monitor, hang watchdog & floating taskbar mini-bar.</b>
+  <b>Ultra-fast, zero-dependency Windows system resource monitor, RAM optimizer, hang watchdog, per-app firewall & floating taskbar mini-bar.</b>
 </p>
 
 <p align="center">
@@ -20,44 +20,61 @@
 
 ## 📖 Overview (Ta'aruf)
 
-**SHOX** is an ultra-modern, high-performance Windows desktop watchdog built specifically for developers, gamers, and power users. It provides real-time system performance monitoring and intelligently tracks runaway memory/CPU consumption, all while keeping a constant vigil for **Not Responding (Frozen / Hung)** applications using native Windows APIs.
+**SHOX** is an ultra-modern, high-performance Windows desktop performance guardian built specifically for developers, gamers, and power users. It combines real-time hardware telemetry, freeze/hang detection via native Win32 APIs, instant memory purging, process suspension, per-app internet blocking, and auto-start management into a sleek obsidian dark interface.
 
-> **Urdu:** SHOX ek ultra-modern aur fast Windows utility hay jo real-time CPU, RAM, aur Disk usage dikhati hay, aur jab koi app hang hoti hay ya 1 minute se ziada continuous heavy resource use karti hay, toh foran alert aur 1-click **End Task** provide karti hay.
+> **Urdu:** SHOX ek ultra-modern aur powerful Windows utility hay jo real-time CPU, RAM, Network aur Battery health monitor karti hay. Is mein 1-Click Clean RAM, process pause/resume, Game Mode, Windows Firewall per-app internet block, startup apps manager, aur floating Taskbar Mini Bar shamil hain—aur ye **100% zero external dependencies** par chalti hay!
 
 ---
 
-## 🌟 Key Highlights & Features
+## 🌟 Key Highlights & Mega-Features
 
-### 1. ⚡ Real-Time System Metrics
-- **CPU Load:** Instant multi-core calculation via `GetSystemTimes`.
-- **RAM Physical Memory:** Total, Used, Available GB and percentage with smooth progress indicators via `GlobalMemoryStatusEx`.
-- **Disk Storage (C:):** Real-time free vs used space tracking via `GetDiskFreeSpaceExW`.
+### 1. 🧹 1-Click Clean RAM & Working Set Purge
+- Flushes inactive memory and trims working sets across all accessible processes using native `psapi.EmptyWorkingSet`.
+- Instantly frees hundreds of megabytes to gigabytes of locked memory without closing any apps.
+- **Auto-Purge Mode:** Optionally auto-cleans RAM whenever system memory usage crosses **85%**.
 
-### 2. 🧊 Instant "Not Responding" (Freeze) Detection
-- Communicates directly with the Windows window manager via native `user32.IsHungAppWindow`.
-- The moment any application stops responding to the OS message loop, SHOX immediately triggers a **CRITICAL ALERT**, displays a floating toast notification, highlights the hung process in the table, and gives you a direct **"Force Kill / End Task"** option.
+### 2. ⏸️ Process Suspend (Pause) & ▶️ Resume
+- Freeze unwanted background games or heavy software without terminating them using native `ntdll.NtSuspendProcess` and `ntdll.NtResumeProcess`.
+- Resumes instantly when you need them, saving battery and CPU cycles.
 
-### 3. 🔥 Smart Sustained Usage Watchdog (> 1 Minute)
-- **No Annoying Sounds / Spikes:** Temporary resource spikes (such as opening a browser tab or compiling code) do not trigger spam alerts.
-- **Sustained Tracking:** Alerts and toast notifications are only fired if a background or foreground process continuously consumes heavy CPU/RAM for **over 60 seconds**.
+### 3. 🚀 Game / Focus Mode (Priority Booster)
+- Elevates active games or critical applications to `HIGH` CPU scheduling priority via `kernel32.SetPriorityClass`.
+- Maximizes frame rates and minimizes input latency during gaming or intensive compilation tasks.
 
-### 4. 🌐 Real-Time Internet & Network Traffic Monitor
-- **Active Socket Tracking:** Leverages Windows IP Helper API (`GetExtendedTcpTable`, `GetExtendedUdpTable`) to list every application actively using the internet or network ports.
-- **Inspect Remote Connections:** View Process Name, PID, Protocol (TCP/UDP), Local Port, Remote IP, and Service type (e.g. `HTTPS`, `DNS`, `SSH`, `SMB`).
+### 4. 📈 60-Second Real-Time Wave Graphs (Canvas Sparklines)
+- Ultra-smooth, anti-aliased live performance wave charts rendered natively using Tkinter vector canvas.
+- Real-time visualization for **CPU Load Wave**, **RAM Committed Wave**, and **Network Bandwidth Wave** without heavy plotting dependencies.
+
+### 5. 🌐 Real-Time Network Sockets & Data Usage Tracker
+- **Active Socket Tracking:** Leverages Windows IP Helper API (`GetExtendedTcpTable`, `GetExtendedUdpTable`) to list every app using the internet.
+- **Inspect Remote Connections:** View Process Name, PID, Protocol (TCP/UDP), Local Port, Remote IP, and Service type (e.g. `HTTPS`, `DNS`, `SSH`).
 - **Live Bandwidth Speeds:** Real-time download (`↓ KB/s`) and upload (`↑ KB/s`) calculation via `GetIfTable2`.
-- **1-Click Network Disconnect / End Task:** Instantly terminate suspicious background network connections.
+- **Cumulative Session Data Usage:** Tracks total MB/GB downloaded and uploaded since SHOX started.
 
-### 5. 📌 Floating Mini Bar (Docked Above Taskbar Clock)
-- Compact, frameless floating widget designed to sit unobtrusively directly above the Windows system clock.
-- Shows live CPU, RAM, and real-time network speeds (`🌐 ↓0K ↑0K`).
-- Fully draggable with a dedicated grip (`⋮⋮`) and 1-click expand (`⛶`) to the full dashboard.
+### 6. 🛡️ 1-Click App Internet Block (Windows Firewall)
+- Instantly block any suspicious or bandwidth-hogging application from accessing the internet via native Windows Defender Firewall rules (`netsh advfirewall`).
+- Easily remove firewall block rules with 1 click.
 
-### 6. 🎨 Obsidian Dark Modern UI (Zero Blur)
-- **High-DPI Per-Monitor Aware:** Configured via `ctypes.windll.shcore.SetProcessDpiAwareness(2)` for razor-sharp rendering on 1080p, 2K, 4K, and high-DPI laptop displays.
+### 7. 🔋 Laptop Battery & AC Power Health Monitor
+- Continuously inspects AC power supply, battery health percentage, and charging state via `kernel32.GetSystemPowerStatus`.
+- Integrated directly into both the main dashboard and the floating mini bar.
+
+### 8. 🚀 Windows Startup Applications Manager
+- Enumerate and inspect all apps configured to auto-start with Windows across `HKCU` and `HKLM` Run registries.
+- **Start SHOX with Windows:** Built-in 1-click toggle to auto-start SHOX in lightweight Mini Bar mode on boot.
+
+### 9. 🧊 Instant "Not Responding" (Freeze) Watchdog
+- Communicates directly with the Windows window manager via native `user32.IsHungAppWindow`.
+- If an app freezes, SHOX immediately alerts you with an obsidian toast notification and 1-click force kill.
+
+### 10. 📌 Floating Mini Bar (Docked Above Taskbar Clock)
+- Compact, frameless floating widget designed to sit directly above the Windows system clock.
+- Displays live CPU, RAM, Network traffic, battery status, and a quick **🧹 Clean RAM** button.
+- Fully draggable with grip handle (`⋮⋮`) and 1-click expand (`⛶`) to the full dashboard.
+
+### 11. 🎨 Obsidian Dark Modern UI (Zero Blur)
+- **High-DPI Per-Monitor Aware:** Configured via `shcore.SetProcessDpiAwareness(2)` for razor-sharp rendering on 1080p, 2K, 4K, and high-DPI laptop displays.
 - Custom vector canvas micro-bars, obsidian card styling, alternating table rows, and color-coded status badges.
-
-### 7. 🚀 100% Zero External Dependencies
-- Runs natively on any clean Windows installation! No `pip install`, no external C++ wheels, no psutil compilation required. Uses pure standard library `ctypes` and `tkinter`.
 
 ---
 
@@ -68,9 +85,10 @@ shox/
 ├── assets/
 │   ├── shox_logo.png        # Official high-resolution logo (PNG)
 │   ├── shox_logo.jpg        # High-definition source image
-│   └── shox.ico             # Windows multi-resolution icon
+│   └── shox.ico             # Windows multi-resolution icon (16x16 to 256x256)
 ├── app_gui.py               # Main Obsidian Dark dashboard (Tkinter UI)
 ├── mini_bar.py              # Floating mini bar widget (taskbar dock)
+├── optimizer_engine.py      # Win32 optimization, RAM purge, suspend, firewall, battery
 ├── network_engine.py        # Native Win32 network & bandwidth engine
 ├── monitor_engine.py        # Native Win32 ctypes engine (CPU, RAM, Hung detector)
 ├── alert_manager.py         # Smart sustained 1-minute alert watchdog & history
@@ -79,7 +97,7 @@ shox/
 ├── main.py                  # CLI and GUI entry point (supports --mini flag)
 ├── run.bat                  # Double-click launcher for Full Dashboard
 ├── run_mini.bat             # Double-click launcher for Mini Bar View
-├── test_system_full.py      # Automated integration test suite (9 tests)
+├── test_system_full.py      # Automated integration test suite (14 tests)
 ├── .gitignore               # Clean git exclusions
 ├── LICENSE                  # MIT License
 └── README.md                # Project documentation
@@ -92,7 +110,7 @@ shox/
 ### Prerequisites
 - Windows 10 or Windows 11 (64-bit or 32-bit)
 - Python 3.10+ (Python 3.12 recommended)
-- **No `pip` packages required!**
+- **No `pip install` required! Zero external dependencies.**
 
 ### Launching the Application
 
@@ -108,7 +126,7 @@ Double-click [`run.bat`](run.bat) or run:
 ```powershell
 python main.py
 ```
-*Opens the comprehensive performance monitoring suite with search filters, sorting, and settings.*
+*Opens the comprehensive performance monitoring suite with live wave graphs, process suspension, and RAM optimization.*
 
 ---
 
@@ -131,39 +149,39 @@ Want to verify how SHOX catches frozen programs?
 ## ⚙️ Architecture & Technical Details
 
 ```
-   ┌────────────────────────────────────────────────────────┐
-   │               Native Windows Subsystem                 │
-   │  kernel32.dll  •  user32.dll  •  psapi.dll • shcore    │
-   └───────────────┬────────────────────────┬───────────────┘
-                   │                        │
-                   ▼                        ▼
-        ┌──────────────────────┐ ┌──────────────────────┐
-        │ monitor_engine.py    │ │ toast_popup.py       │
-        │ - GlobalMemoryStatus │ │ - Floating Toasts    │
-        │ - GetSystemTimes     │ │ - 1-Click Kill Task  │
-        │ - IsHungAppWindow    │ └──────────▲───────────┘
-        └──────────┬───────────┘            │
-                   │                        │
-                   ▼                        │
-        ┌──────────────────────┐            │
-        │ alert_manager.py     ├────────────┘
-        │ - 60s Sustained Rule │
-        │ - Dedup & History    │
-        └──────────┬───────────┘
-                   │
-         ┌─────────┴─────────┐
-         ▼                   ▼
-┌──────────────────┐ ┌──────────────────┐
-│ app_gui.py       │ │ mini_bar.py      │
-│ (Full Dashboard) │ │ (Taskbar Dock)   │
-└──────────────────┘ └──────────────────┘
+   ┌────────────────────────────────────────────────────────────────────────┐
+   │                        Native Windows Subsystem                        │
+   │  kernel32.dll • user32.dll • psapi.dll • ntdll.dll • iphlpapi • winreg │
+   └───────────────┬──────────────────────────┬─────────────────────────────┘
+                   │                          │
+                   ▼                          ▼
+        ┌──────────────────────┐   ┌──────────────────────┐
+        │ monitor_engine.py    │   │ optimizer_engine.py  │
+        │ - GlobalMemoryStatus │   │ - EmptyWorkingSet    │
+        │ - GetSystemTimes     │   │ - NtSuspendProcess   │
+        │ - IsHungAppWindow    │   │ - SetPriorityClass   │
+        └──────────┬───────────┘   │ - Windows Firewall   │
+                   │               │ - Power Status (AC)  │
+                   ▼               └──────────┬───────────┘
+        ┌──────────────────────┐              │
+        │ network_engine.py    │              │
+        │ - GetIfTable2        │              │
+        │ - ExtendedTcpTable   │              │
+        │ - Session Usage      │              │
+        └──────────┬───────────┘              │
+                   │                          │
+                   ▼                          ▼
+        ┌─────────────────────────────────────────────────┐
+        │              app_gui.py / mini_bar.py           │
+        │   Sparklines • Micro-Bars • Obsidian Theme      │
+        └─────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## 🧪 Running Automated Tests
 
-To run the full suite of 9 integration tests:
+To run the full suite of 14 integration tests:
 ```powershell
 python -u test_system_full.py
 ```
@@ -183,8 +201,13 @@ Expected result:
 [TEST 7] GUI Modules: PASSED
 [TEST 8] Network Connections: PASSED
 [TEST 9] Network Bandwidth: PASSED
+[TEST 10] Session Data Tracker: PASSED
+[TEST 11] Clean RAM Purge: PASSED
+[TEST 12] Power Status: PASSED
+[TEST 13] Startup Manager: PASSED
+[TEST 14] Process Priority Control: PASSED
 ==================================================
- [SUCCESS] ALL 9 INTEGRATION TESTS PASSED SUCCESSFULLY!
+ [SUCCESS] ALL 14 INTEGRATION TESTS PASSED SUCCESSFULLY!
 ==================================================
 ```
 

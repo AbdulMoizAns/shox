@@ -32,9 +32,10 @@ from monitor_engine import SystemMonitorEngine
 from alert_manager import AlertManager
 from toast_popup import show_toast_popup
 from network_engine import NetworkMonitorEngine
+from optimizer_engine import SystemOptimizerEngine
 
 
-def get_taskbar_anchor_position(bar_width=515, bar_height=42):
+def get_taskbar_anchor_position(bar_width=570, bar_height=42):
     """
     Retrieves the Windows usable screen work area (excluding taskbar)
     and computes the exact (x, y) coordinates to sit right above the clock.
@@ -66,7 +67,7 @@ class MiniBarWidget:
             pass
 
         # Window dimensions & styling
-        self.bar_width = 515
+        self.bar_width = 570
         self.bar_height = 42
         self.root.overrideredirect(True)      # Frameless floating widget
         self.root.attributes("-topmost", True)  # Always on top
@@ -84,6 +85,7 @@ class MiniBarWidget:
         self.engine = SystemMonitorEngine()
         self.alert_mgr = AlertManager()
         self.net_engine = NetworkMonitorEngine()
+        self.optimizer = SystemOptimizerEngine()
         self.is_running = True
         self.blink_state = False
 
@@ -127,7 +129,17 @@ class MiniBarWidget:
             pady=1,
             relief="flat"
         )
-        shox_badge.pack(side="left", padx=(1, 4))
+        shox_badge.pack(side="left", padx=(1, 3))
+
+        # Battery / Power Badge
+        self.battery_badge = tk.Label(
+            self.outer_border,
+            text="⚡ AC",
+            font=("Segoe UI", 8, "bold"),
+            fg="#34d399",
+            bg="#11141c"
+        )
+        self.battery_badge.pack(side="left", padx=(1, 3))
 
         # CPU Metric
         cpu_box = tk.Frame(self.outer_border, bg="#11141c")
@@ -222,9 +234,26 @@ class MiniBarWidget:
         self.status_badge.pack(side="left", padx=4)
         self.status_badge.bind("<Button-1>", self.on_status_clicked)
 
-        # Action Buttons (Expand & Close)
+        # Action Buttons (Clean RAM, Expand & Close)
         btn_box = tk.Frame(self.outer_border, bg="#11141c")
         btn_box.pack(side="right", padx=(2, 8))
+
+        # Quick Clean RAM Micro-Button
+        self.quick_clean_btn = tk.Button(
+            btn_box,
+            text="🧹",
+            command=self.quick_clean_ram,
+            font=("Segoe UI", 9),
+            fg="#fbbf24",
+            bg="#11141c",
+            activeforeground="#fef08a",
+            activebackground="#1e2330",
+            bd=0,
+            padx=4,
+            cursor="hand2",
+            relief="flat"
+        )
+        self.quick_clean_btn.pack(side="left", padx=1)
 
         # Expand to full Dashboard
         self.expand_btn = tk.Button(
@@ -292,6 +321,17 @@ class MiniBarWidget:
                 return
         self.expand_to_full()
 
+    def quick_clean_ram(self):
+        def _work():
+            freed_mb, count = self.optimizer.clean_system_ram()
+            show_toast_popup({
+                "name": "SHOX Mini",
+                "type": "RAM_CLEANED",
+                "message": f"Purged {freed_mb:.1f} MB RAM across {count} processes.",
+                "severity": "NORMAL"
+            })
+        threading.Thread(target=_work, daemon=True).start()
+
     def expand_to_full(self):
         if self.on_expand_callback:
             self.on_expand_callback()
@@ -318,6 +358,7 @@ class MiniBarWidget:
                 mem = self.engine.get_memory_stats()
                 procs = self.engine.get_processes()
                 down_kb, up_kb, down_str, up_str = self.net_engine.get_bandwidth_speeds()
+                power = self.optimizer.get_power_status()
 
                 d_compact = f"{down_kb:.0f}K" if down_kb < 1000 else f"{down_kb/1024.0:.1f}M"
                 u_compact = f"{up_kb:.0f}K" if up_kb < 1000 else f"{up_kb/1024.0:.1f}M"
@@ -330,16 +371,24 @@ class MiniBarWidget:
                 }
                 alerts = self.alert_mgr.evaluate(sys_summary, procs)
 
-                self.root.after(0, self._update_ui, cpu_pct, mem, alerts, net_text)
+                self.root.after(0, self._update_ui, cpu_pct, mem, alerts, net_text, power)
             except Exception:
                 pass
             time.sleep(1.0)
 
-    def _update_ui(self, cpu_pct, mem, alerts, net_text="↓0K ↑0K"):
+    def _update_ui(self, cpu_pct, mem, alerts, net_text="↓0K ↑0K", power=None):
         self.cpu_val.config(text=f"{cpu_pct:.0f}%")
         self.ram_val.config(text=f"{mem['percent']}% ({mem['used_gb']}G)")
         if hasattr(self, 'net_val') and self.net_val:
             self.net_val.config(text=net_text)
+
+        if power and hasattr(self, 'battery_badge') and self.battery_badge:
+            b_icon = power.get("icon", "⚡")
+            if power.get("is_ac"):
+                self.battery_badge.config(text=f"{b_icon} AC", fg="#34d399")
+            else:
+                pct = power.get("percent", 0)
+                self.battery_badge.config(text=f"{b_icon} {pct}%", fg="#fbbf24" if pct < 30 else "#38bdf8")
 
         hung_alerts = [a for a in alerts if a["type"] == "HUNG"]
         heavy_alerts = [a for a in alerts if a["type"] in ("HIGH_RAM", "HIGH_CPU")]

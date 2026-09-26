@@ -136,6 +136,8 @@ class NetworkMonitorEngine:
     def __init__(self):
         self.last_sample_time = time.time()
         self.last_in_octets, self.last_out_octets = self._get_total_octets()
+        self.session_in_bytes = 0
+        self.session_out_bytes = 0
         self.pid_name_cache: Dict[int, str] = {}
         self.last_cache_time = 0.0
 
@@ -234,6 +236,9 @@ class NetworkMonitorEngine:
         bytes_in = max(0, in_octets - self.last_in_octets)
         bytes_out = max(0, out_octets - self.last_out_octets)
 
+        self.session_in_bytes += bytes_in
+        self.session_out_bytes += bytes_out
+
         self.last_in_octets = in_octets
         self.last_out_octets = out_octets
         self.last_sample_time = now
@@ -247,6 +252,21 @@ class NetworkMonitorEngine:
             return f"{kb:.1f} KB/s"
 
         return down_kb_s, up_kb_s, format_speed(down_kb_s), format_speed(up_kb_s)
+
+    def get_session_data_usage(self) -> Tuple[float, float, str, str]:
+        """
+        Returns cumulative session data usage in MB and formatted string.
+        (in_mb, out_mb, in_str, out_str)
+        """
+        in_mb = self.session_in_bytes / (1024.0 * 1024.0)
+        out_mb = self.session_out_bytes / (1024.0 * 1024.0)
+
+        def format_data(mb: float) -> str:
+            if mb >= 1024.0:
+                return f"{mb / 1024.0:.2f} GB"
+            return f"{mb:.1f} MB"
+
+        return in_mb, out_mb, format_data(in_mb), format_data(out_mb)
 
     def get_active_connections(self) -> List[Dict]:
         """
